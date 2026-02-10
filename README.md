@@ -1,73 +1,47 @@
-# React + TypeScript + Vite
+# 🌐 PENS Room Booking - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Repositori ini berisi kode sumber antarmuka (Frontend) untuk aplikasi **Peminjaman Ruangan PENS**. Proyek ini merupakan bagian dari tugas Semester 4 untuk membangun sistem booking real-time yang modern dan user-friendly.
 
-Currently, two official plugins are available:
+## 🎨 Fitur Visual & UI
+* **Tema Terang (Light Mode)**: Desain bersih dengan palet warna Biru PENS (#2563eb) dan Putih Bersih.
+* **Dashboard Real-time**: Monitoring status peminjaman langsung yang terhubung ke API.
+* **Modal Form yang Rapi**: Input data menggunakan toggle modal dengan efek *backdrop blur*.
+* **Responsive Design**: Nyaman diakses baik dari desktop maupun perangkat mobile.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🛠️ Tech Stack
+* **Vite**: Alat build frontend generasi terbaru yang super cepat.
+* **React + TypeScript**: Library UI dengan sistem tipe data yang kuat untuk meminimalisir error.
+* **Tailwind CSS v4**: Framework CSS utility-first untuk styling cepat dan modern.
 
-## React Compiler
+## ⚙️ Cara Menjalankan di Lokal
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1.  **Clone Repositori**:
+    ```bash
+    git clone [https://github.com/koalaruu/2026-peminjaman-ruangan-frontend.git](https://github.com/koalaruu/2026-peminjaman-ruangan-frontend.git)
+    cd room-booking-frontend
+    ```
 
-## Expanding the ESLint configuration
+2.  **Instalasi Dependencies**:
+    ```bash
+    npm install
+    ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+3.  **Konfigurasi API Backend**:
+    Aplikasi ini memerlukan Backend ASP.NET Core berjalan. Pastikan API kamu aktif di:
+    `http://localhost:5023/api/Bookings`.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+4.  **Jalankan Server Development**:
+    ```bash
+    npm run dev
+    ```
+    Buka browser di [http://localhost:5173](http://localhost:5173).
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 🔐 Panduan Hak Akses (Role)
+Gunakan kredensial berikut untuk mencoba berbagai fitur:
+* **User**: Tanpa password. Bisa menambah data peminjaman baru.
+* **Manager**: Password `password123`. Bisa mengupdate status (Approved/Rejected).
+* **Admin**: Password `password123`. Akses penuh untuk Edit dan Hapus data.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
+**Dibuat oleh:** **Adryan Fahmi Ramadhan** NRP: 312460082  
+ITDS - Politeknik Elektronika Negeri Surabaya
