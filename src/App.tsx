@@ -31,6 +31,13 @@ function App() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [rooms, setRooms] = useState<Array<{ id: number; name: string }>>([])
 
+  const [isRoomsModalOpen, setIsRoomsModalOpen] = useState(false)
+  const [roomSearchTerm, setRoomSearchTerm] = useState('')
+  const [editingRoom, setEditingRoom] = useState<{ id?: number; name: string } | null>(null)
+  const [roomFormName, setRoomFormName] = useState('')
+  const [isRoomDeleteModalOpen, setIsRoomDeleteModalOpen] = useState(false)
+  const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null)
+
   const [newBooking, setNewBooking] = useState<Booking>({
     roomId: undefined, roomName: '', requesterName: '', purpose: '', status: 'Pending', startTime: '', endTime: '', createdAt: ''
   });
@@ -84,6 +91,14 @@ function App() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // client-side validation
+    if (!newBooking.roomId) { alert('Pilih ruangan.'); return; }
+    const start = new Date(newBooking.startTime);
+    const end = new Date(newBooking.endTime);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) { alert('Waktu tidak valid.'); return; }
+    if (end <= start) { alert('Waktu selesai harus lebih besar dari waktu mulai.'); return; }
+
     try {
       const url = editingId ? `http://localhost:5023/api/Bookings/${editingId}` : 'http://localhost:5023/api/Bookings';
       // build payload and OMIT createdAt when it's empty (server expects a valid DateTime)
@@ -122,6 +137,7 @@ function App() {
   const handleEdit = (booking: Booking) => {
     setNewBooking({
       ...booking,
+      roomId: booking.roomId,
       startTime: new Date(booking.startTime).toISOString().slice(0, 16),
       endTime: new Date(booking.endTime).toISOString().slice(0, 16),
     });
@@ -151,7 +167,80 @@ function App() {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
-    setNewBooking({ roomName: '', requesterName: '', purpose: '', status: 'Pending', startTime: '', endTime: '', createdAt: '' });
+    setNewBooking({ roomId: undefined, roomName: '', requesterName: '', purpose: '', status: 'Pending', startTime: '', endTime: '', createdAt: '' });
+  }
+
+  // --- Rooms (Admin) handlers ---
+  const openRoomsModal = () => {
+    setRoomFormName('');
+    setEditingRoom(null);
+    setIsRoomsModalOpen(true);
+    fetchRooms();
+  }
+
+  const handleRoomEdit = (room: { id: number; name: string }) => {
+    setEditingRoom(room);
+    setRoomFormName(room.name);
+  }
+
+  const handleRoomSave = async () => {
+    if (!roomFormName.trim()) { alert('Nama ruangan wajib diisi'); return; }
+    try {
+      if (editingRoom?.id) {
+        await fetch(`http://localhost:5023/api/Rooms/${editingRoom.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingRoom.id, name: roomFormName.trim() })
+        });
+      } else {
+        await fetch('http://localhost:5023/api/Rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: roomFormName.trim() })
+        });
+      }
+      await fetchRooms();
+      await fetchBookings(debouncedSearchTerm);
+      setRoomFormName('');
+      setEditingRoom(null);
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menyimpan ruangan.');
+    }
+  }
+
+  const handleRoomDelete = (id: number) => {
+    setDeletingRoomId(id);
+    setIsRoomDeleteModalOpen(true);
+  }
+
+  const confirmRoomDelete = async () => {
+    if (!deletingRoomId) return;
+    try {
+      const res = await fetch(`http://localhost:5023/api/Rooms/${deletingRoomId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const text = await res.text();
+        alert('Gagal menghapus ruangan: ' + (text || res.status));
+      }
+      await fetchRooms();
+      setDeletingRoomId(null);
+      setIsRoomDeleteModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menghapus ruangan.');
+    }
+  }
+
+  const cancelRoomDelete = () => {
+    setDeletingRoomId(null);
+    setIsRoomDeleteModalOpen(false);
+  }
+
+  const closeRoomsModal = () => {
+    setIsRoomsModalOpen(false);
+    setRoomFormName('');
+    setEditingRoom(null);
+    setRoomSearchTerm('');
   }
 
   const handleDetail = async (id: number) => {
@@ -244,6 +333,11 @@ function App() {
               <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-2xl font-bold shadow-xl shadow-blue-200 transition-all active:scale-95">
                 + Booking Baru
               </button>
+              {userRole === 'Admin' && (
+                <button onClick={() => openRoomsModal()} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-6 py-3.5 rounded-2xl font-bold transition-all">
+                  Kelola Ruangan
+                </button>
+              )}
               <button onClick={() => setIsLoggedIn(false)} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-6 py-3.5 rounded-2xl font-bold transition-all">
                 Logout
               </button>
@@ -437,6 +531,77 @@ function App() {
               <div className="flex gap-4 pt-4">
                 <button type="button" onClick={closeHistoryModal} className="w-full bg-yellow-600 text-white py-3.5 rounded-2xl font-black hover:bg-yellow-700 transition-all shadow-xl shadow-yellow-100">TUTUP</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- ROOMS (ADMIN) MODAL --- */}
+      {isRoomsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="bg-white border border-slate-100 rounded-[2.5rem] w-full max-w-3xl shadow-2xl">
+            <div className="bg-slate-800 p-6 flex justify-between items-center text-white rounded-t-[2.5rem]">
+              <h2 className="text-lg font-black">Kelola Ruangan</h2>
+              <button onClick={closeRoomsModal} className="text-2xl opacity-50 hover:opacity-100 transition-opacity">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex gap-4 items-center">
+                <input type="text" placeholder="Cari ruangan..." className="flex-1 bg-slate-50 border border-slate-200 p-3 rounded-2xl outline-none"
+                  value={roomSearchTerm} onChange={(e) => setRoomSearchTerm(e.target.value)} />
+                <div className="w-72 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                  <label className="text-xs font-black text-slate-400">Tambah / Edit</label>
+                  <div className="mt-2 flex gap-2">
+                    <input className="flex-1 bg-transparent outline-none" placeholder="Nama Ruangan" value={roomFormName} onChange={(e) => setRoomFormName(e.target.value)} />
+                    <button onClick={handleRoomSave} className="bg-blue-600 text-white px-4 py-2 rounded-2xl font-bold">Simpan</button>
+                  </div>
+                  {editingRoom && <div className="text-xs text-slate-400 mt-2">Mengedit: {editingRoom.name}</div>}
+                </div>
+              </div>
+
+              <div className="overflow-auto max-h-64 border border-slate-100 rounded-2xl">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50/50 border-b border-slate-100">
+                    <tr>
+                      <th className="px-4 py-3 text-xs font-black text-slate-400 uppercase">Nama Ruangan</th>
+                      <th className="px-4 py-3 text-xs font-black text-slate-400 uppercase text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {rooms.filter(r => r.name.toLowerCase().includes(roomSearchTerm.toLowerCase())).map(r => (
+                      <tr key={r.id}>
+                        <td className="px-4 py-3 font-semibold text-slate-700">{r.name}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => handleRoomEdit(r)} className="p-2.5 bg-slate-50 hover:bg-blue-50 text-blue-600 rounded-xl">✏️</button>
+                            <button onClick={() => handleRoomDelete(r.id)} className="p-2.5 bg-slate-50 hover:bg-rose-50 text-rose-600 rounded-xl">🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button onClick={closeRoomsModal} className="flex-1 py-3.5 font-bold text-slate-500 hover:text-slate-700 transition-colors rounded-2xl">Tutup</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Room delete confirmation modal */}
+      {isRoomDeleteModalOpen && (
+        <div className="fixed inset-0 bg-rose-900/20 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="bg-white border border-rose-100 rounded-[2.5rem] w-full max-w-md shadow-2xl shadow-rose-200/50">
+            <div className="p-8 text-center">
+              <span className="text-5xl block mb-4">🗑️</span>
+              <h2 className="text-2xl font-black text-rose-900 tracking-tight">Hapus Ruangan?</h2>
+              <p className="text-slate-500 mt-2">Menghapus ruangan tidak diperbolehkan jika masih ada peminjaman. Lanjutkan?</p>
+            </div>
+            <div className="flex bg-rose-50/50 rounded-b-[2.5rem] p-5 gap-4">
+              <button onClick={cancelRoomDelete} className="flex-1 py-3.5 font-bold text-slate-500 hover:text-slate-700 transition-colors rounded-2xl">Batal</button>
+              <button onClick={confirmRoomDelete} className="flex-1 bg-rose-600 text-white py-3.5 rounded-2xl font-black hover:bg-rose-700 transition-all shadow-xl shadow-rose-200">Ya, Hapus</button>
             </div>
           </div>
         </div>
