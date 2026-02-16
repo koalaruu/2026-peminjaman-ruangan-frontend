@@ -18,6 +18,9 @@ function App() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
+  const [historyBookings, setHistoryBookings] = useState<Booking[]>([])
+  const [historyRoomName, setHistoryRoomName] = useState<string>('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -66,23 +69,50 @@ function App() {
   }, [debouncedSearchTerm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     try {
-      const url = editingId ? `http://localhost:5023/api/Bookings/${editingId}` : 'http://localhost:5023/api/Bookings'
+      const url = editingId ? `http://localhost:5023/api/Bookings/${editingId}` : 'http://localhost:5023/api/Bookings';
+      // build payload and OMIT createdAt when it's empty (server expects a valid DateTime)
+      const payload: any = {
+        roomName: newBooking.roomName,
+        requesterName: newBooking.requesterName,
+        startTime: new Date(newBooking.startTime).toISOString(),
+        endTime: new Date(newBooking.endTime).toISOString(),
+        purpose: newBooking.purpose,
+        status: newBooking.status,
+      };
+      if (newBooking.createdAt) payload.createdAt = newBooking.createdAt;
+      // when updating an existing booking the API expects the booking 'id' in the body
+      if (editingId) payload.id = editingId;
+
       const response = await fetch(url, {
         method: editingId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newBooking)
-      })
-      if (response.ok) { 
-        fetchBookings(debouncedSearchTerm); 
-        closeModal(); 
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        await fetchBookings(debouncedSearchTerm);
+        closeModal();
+      } else {
+        const text = await response.text();
+        console.error('Save failed', response.status, text);
+        alert('Gagal menyimpan: ' + (text || response.status));
       }
-    } catch (err) { console.error(err) }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan. Cek console untuk detail.');
+    }
   }
 
   const handleEdit = (booking: Booking) => {
-    setNewBooking(booking); setEditingId(booking.id || null); setIsModalOpen(true);
+    setNewBooking({
+      ...booking,
+      startTime: new Date(booking.startTime).toISOString().slice(0, 16),
+      endTime: new Date(booking.endTime).toISOString().slice(0, 16),
+    });
+    setEditingId(booking.id || null);
+    setIsModalOpen(true);
   }
 
   const handleDelete = (id: number) => {
@@ -124,6 +154,30 @@ function App() {
   const closeDetailModal = () => {
     setIsDetailModalOpen(false);
     setSelectedBooking(null);
+  }
+
+  const handleHistory = async (roomName: string) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`http://localhost:5023/api/Bookings?searchTerm=${encodeURIComponent(roomName)}`);
+      const data: Booking[] = await response.json();
+      // `searchTerm` is a substring search on server — filter exact room name here and sort by startTime desc
+      const filtered = data.filter(b => b.roomName === roomName)
+                           .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+      setHistoryBookings(filtered);
+      setHistoryRoomName(roomName);
+      setIsHistoryModalOpen(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const closeHistoryModal = () => {
+    setIsHistoryModalOpen(false);
+    setHistoryBookings([]);
+    setHistoryRoomName('');
   }
 
   return (
@@ -220,6 +274,7 @@ function App() {
                     <td className="px-8 py-6 text-right">
                         <div className="flex justify-end gap-2">
                           <button onClick={() => item.id && handleDetail(item.id)} className="p-2.5 bg-slate-50 hover:bg-green-100 text-green-600 rounded-xl transition-all">👁️</button>
+                          <button onClick={() => handleHistory(item.roomName)} className="p-2.5 bg-slate-50 hover:bg-yellow-100 text-yellow-600 rounded-xl transition-all">📜</button>
                           {(userRole === 'Admin' || userRole === 'Manager') && (
                               <>
                                   <button onClick={() => handleEdit(item)} className="p-2.5 bg-slate-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all">✏️</button>
@@ -255,6 +310,18 @@ function App() {
                   <label className="text-xs font-black text-slate-400 ml-1 uppercase">Peminjam</label>
                   <input type="text" required placeholder="Nama Anda" className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-600 outline-none transition-all"
                     value={newBooking.requesterName} onChange={(e) => setNewBooking({...newBooking, requesterName: e.target.value})} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 ml-1 uppercase">Waktu Mulai</label>
+                  <input type="datetime-local" required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-600 outline-none transition-all"
+                    value={newBooking.startTime} onChange={(e) => setNewBooking({...newBooking, startTime: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 ml-1 uppercase">Waktu Selesai</label>
+                  <input type="datetime-local" required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-600 outline-none transition-all"
+                    value={newBooking.endTime} onChange={(e) => setNewBooking({...newBooking, endTime: e.target.value})} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -306,6 +373,51 @@ function App() {
               </div>
               <div className="flex gap-4 pt-4">
                 <button type="button" onClick={closeDetailModal} className="w-full bg-blue-600 text-white py-3.5 rounded-2xl font-black hover:bg-blue-700 transition-all shadow-xl shadow-blue-100">TUTUP</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- HISTORY MODAL --- */}
+      {isHistoryModalOpen && (
+        <div className="fixed inset-0 bg-yellow-900/10 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="bg-white border border-yellow-100 rounded-[2.5rem] w-full max-w-2xl shadow-2xl">
+            <div className="bg-yellow-600 p-6 flex justify-between items-center text-white rounded-t-[2.5rem]">
+              <h2 className="text-lg font-black tracking-tight">Riwayat Peminjaman — {historyRoomName}</h2>
+              <button onClick={closeHistoryModal} className="text-2xl opacity-50 hover:opacity-100 transition-opacity">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              {historyBookings.length === 0 ? (
+                <div className="text-center p-6 text-slate-500">Belum ada riwayat peminjaman untuk ruangan ini.</div>
+              ) : (
+                <div className="overflow-auto max-h-96">
+                  <table className="w-full text-left">
+                    <thead className="bg-yellow-50/50 border-b border-yellow-100">
+                      <tr>
+                        <th className="px-4 py-3 text-xs font-black text-yellow-900/40 uppercase">Peminjam</th>
+                        <th className="px-4 py-3 text-xs font-black text-yellow-900/40 uppercase">Waktu Mulai</th>
+                        <th className="px-4 py-3 text-xs font-black text-yellow-900/40 uppercase">Waktu Selesai</th>
+                        <th className="px-4 py-3 text-xs font-black text-yellow-900/40 uppercase">Tujuan</th>
+                        <th className="px-4 py-3 text-xs font-black text-yellow-900/40 uppercase">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {historyBookings.map(b => (
+                        <tr key={b.id}>
+                          <td className="px-4 py-3 font-semibold text-slate-700">{b.requesterName}</td>
+                          <td className="px-4 py-3 text-sm text-slate-500">{new Date(b.startTime).toLocaleString('id-ID')}</td>
+                          <td className="px-4 py-3 text-sm text-slate-500">{new Date(b.endTime).toLocaleString('id-ID')}</td>
+                          <td className="px-4 py-3 text-sm text-slate-500 italic max-w-xs truncate">{b.purpose}</td>
+                          <td className="px-4 py-3 text-sm font-black uppercase">{b.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={closeHistoryModal} className="w-full bg-yellow-600 text-white py-3.5 rounded-2xl font-black hover:bg-yellow-700 transition-all shadow-xl shadow-yellow-100">TUTUP</button>
               </div>
             </div>
           </div>
