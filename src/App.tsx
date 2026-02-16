@@ -23,6 +23,8 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userRole, setUserRole] = useState<'Admin' | 'Manager' | 'User'>('User')
   const [adminPassword, setAdminPassword] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [newBooking, setNewBooking] = useState<Booking>({
     roomName: '', requesterName: '', purpose: '', status: 'Pending', startTime: '', endTime: '', createdAt: ''
   });
@@ -38,17 +40,30 @@ function App() {
     }
   }
 
-  const fetchBookings = async () => {
+  const fetchBookings = async (term: string) => {
     setIsLoading(true)
     try {
-      const response = await fetch('http://localhost:5023/api/Bookings')
+      const url = term ? `http://localhost:5023/api/Bookings?searchTerm=${encodeURIComponent(term)}` : 'http://localhost:5023/api/Bookings';
+      const response = await fetch(url)
       const data = await response.json()
       setBookings(data)
     } catch (err) { console.error(err) }
     finally { setIsLoading(false) }
   }
 
-  useEffect(() => { fetchBookings() }, [])
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // 500ms debounce delay
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchBookings(debouncedSearchTerm)
+  }, [debouncedSearchTerm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,7 +74,10 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newBooking)
       })
-      if (response.ok) { fetchBookings(); closeModal(); }
+      if (response.ok) { 
+        fetchBookings(debouncedSearchTerm); 
+        closeModal(); 
+      }
     } catch (err) { console.error(err) }
   }
 
@@ -75,7 +93,7 @@ function App() {
   const confirmDelete = async () => {
     if (deletingId) {
       await fetch(`http://localhost:5023/api/Bookings/${deletingId}`, { method: 'DELETE' })
-      fetchBookings()
+      fetchBookings(debouncedSearchTerm)
       setDeletingId(null)
       setIsDeleteModalOpen(false)
     }
@@ -163,6 +181,16 @@ function App() {
               </button>
             </div>
           </header>
+
+          <div className="mb-8">
+            <input
+              type="text"
+              placeholder="🔍 Cari berdasarkan ruangan, peminjam, tujuan, atau status..."
+              className="w-full bg-white border border-slate-200 p-4 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-600 outline-none transition-all"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
 
           <div className="bg-white border border-blue-100 rounded-[2rem] overflow-hidden shadow-xl shadow-blue-100/50">
             <table className="w-full text-left">
