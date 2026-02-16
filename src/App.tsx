@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 
 interface Booking {
   id?: number;
-  roomName: string;
+  roomId?: number;
+  roomName?: string;
   requesterName: string;
   startTime: string;
   endTime: string;
@@ -22,14 +23,16 @@ function App() {
   const [historyBookings, setHistoryBookings] = useState<Booking[]>([])
   const [historyRoomName, setHistoryRoomName] = useState<string>('')
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [, setIsLoading] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userRole, setUserRole] = useState<'Admin' | 'Manager' | 'User'>('User')
   const [adminPassword, setAdminPassword] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
+  const [rooms, setRooms] = useState<Array<{ id: number; name: string }>>([])
+
   const [newBooking, setNewBooking] = useState<Booking>({
-    roomName: '', requesterName: '', purpose: '', status: 'Pending', startTime: '', endTime: '', createdAt: ''
+    roomId: undefined, roomName: '', requesterName: '', purpose: '', status: 'Pending', startTime: '', endTime: '', createdAt: ''
   });
 
   const handleLogin = (e: React.FormEvent, role: 'Admin' | 'Manager' | 'User') => {
@@ -54,6 +57,16 @@ function App() {
     finally { setIsLoading(false) }
   }
 
+  const fetchRooms = async () => {
+    try {
+      const res = await fetch('http://localhost:5023/api/Rooms')
+      const data = await res.json()
+      setRooms(data)
+    } catch (err) {
+      console.error('Failed to load rooms', err)
+    }
+  }
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
@@ -66,6 +79,7 @@ function App() {
 
   useEffect(() => {
     fetchBookings(debouncedSearchTerm)
+    fetchRooms()
   }, [debouncedSearchTerm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,7 +88,7 @@ function App() {
       const url = editingId ? `http://localhost:5023/api/Bookings/${editingId}` : 'http://localhost:5023/api/Bookings';
       // build payload and OMIT createdAt when it's empty (server expects a valid DateTime)
       const payload: any = {
-        roomName: newBooking.roomName,
+        roomId: newBooking.roomId,
         requesterName: newBooking.requesterName,
         startTime: new Date(newBooking.startTime).toISOString(),
         endTime: new Date(newBooking.endTime).toISOString(),
@@ -161,7 +175,7 @@ function App() {
     try {
       const response = await fetch(`http://localhost:5023/api/Bookings?searchTerm=${encodeURIComponent(roomName)}`);
       const data: Booking[] = await response.json();
-      // `searchTerm` is a substring search on server — filter exact room name here and sort by startTime desc
+      // server returns roomName in responses via Room navigation — filter exact room name here and sort by startTime desc
       const filtered = data.filter(b => b.roomName === roomName)
                            .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
       setHistoryBookings(filtered);
@@ -261,6 +275,7 @@ function App() {
                 {bookings.map((item) => (
                   <tr key={item.id} className="hover:bg-blue-50/30 transition-colors">
                     <td className="px-8 py-6 font-bold text-blue-900 text-lg">{item.roomName}</td>
+                    <td className="hidden">{item.roomId}</td>
                     <td className="px-8 py-6 font-semibold text-slate-600">{item.requesterName}</td>
                     <td className="px-8 py-6 text-sm text-slate-400 italic max-w-xs truncate">"{item.purpose}"</td>
                     <td className="px-8 py-6">
@@ -274,7 +289,7 @@ function App() {
                     <td className="px-8 py-6 text-right">
                         <div className="flex justify-end gap-2">
                           <button onClick={() => item.id && handleDetail(item.id)} className="p-2.5 bg-slate-50 hover:bg-green-100 text-green-600 rounded-xl transition-all">👁️</button>
-                          <button onClick={() => handleHistory(item.roomName)} className="p-2.5 bg-slate-50 hover:bg-yellow-100 text-yellow-600 rounded-xl transition-all">📜</button>
+                          <button onClick={() => item.roomName && handleHistory(item.roomName)} className="p-2.5 bg-slate-50 hover:bg-yellow-100 text-yellow-600 rounded-xl transition-all">📜</button>
                           {(userRole === 'Admin' || userRole === 'Manager') && (
                               <>
                                   <button onClick={() => handleEdit(item)} className="p-2.5 bg-slate-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all">✏️</button>
@@ -303,8 +318,11 @@ function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-xs font-black text-slate-400 ml-1 uppercase">Ruangan</label>
-                  <input type="text" required placeholder="Nama Ruangan" className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-600 outline-none transition-all"
-                    value={newBooking.roomName} onChange={(e) => setNewBooking({...newBooking, roomName: e.target.value})} />
+                  <select required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-600 outline-none transition-all cursor-pointer"
+                    value={newBooking.roomId ?? ''} onChange={(e) => setNewBooking({...newBooking, roomId: Number(e.target.value)})}>
+                    <option value="" disabled>— Pilih Ruangan —</option>
+                    {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-black text-slate-400 ml-1 uppercase">Peminjam</label>
