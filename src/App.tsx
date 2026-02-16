@@ -4,20 +4,27 @@ interface Booking {
   id?: number;
   roomName: string;
   requesterName: string;
+  startTime: string;
+  endTime: string;
   purpose: string;
   status: string;
+  createdAt: string;
 }
 
 function App() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userRole, setUserRole] = useState<'Admin' | 'Manager' | 'User'>('User')
   const [adminPassword, setAdminPassword] = useState('')
   const [newBooking, setNewBooking] = useState<Booking>({
-    roomName: '', requesterName: '', purpose: '', status: 'Pending'
+    roomName: '', requesterName: '', purpose: '', status: 'Pending', startTime: '', endTime: '', createdAt: ''
   });
 
   const handleLogin = (e: React.FormEvent, role: 'Admin' | 'Manager' | 'User') => {
@@ -60,17 +67,45 @@ function App() {
     setNewBooking(booking); setEditingId(booking.id || null); setIsModalOpen(true);
   }
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm("Hapus data peminjaman ini?")) {
-      await fetch(`http://localhost:5023/api/Bookings/${id}`, { method: 'DELETE' })
+  const handleDelete = (id: number) => {
+    setDeletingId(id);
+    setIsDeleteModalOpen(true);
+  }
+
+  const confirmDelete = async () => {
+    if (deletingId) {
+      await fetch(`http://localhost:5023/api/Bookings/${deletingId}`, { method: 'DELETE' })
       fetchBookings()
+      setDeletingId(null)
+      setIsDeleteModalOpen(false)
     }
   }
 
-  const closeModal = () => { 
-    setIsModalOpen(false); 
-    setEditingId(null); 
-    setNewBooking({ roomName: '', requesterName: '', purpose: '', status: 'Pending' }); 
+  const cancelDelete = () => {
+    setDeletingId(null);
+    setIsDeleteModalOpen(false);
+  }
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setNewBooking({ roomName: '', requesterName: '', purpose: '', status: 'Pending', startTime: '', endTime: '', createdAt: '' });
+  }
+
+  const handleDetail = async (id: number) => {
+    try {
+      const response = await fetch(`http://localhost:5023/api/Bookings/${id}`)
+      const data = await response.json()
+      setSelectedBooking(data)
+      setIsDetailModalOpen(true)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const closeDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedBooking(null);
   }
 
   return (
@@ -137,7 +172,7 @@ function App() {
                   <th className="px-8 py-6 text-xs font-black text-blue-900/40 uppercase tracking-widest">Peminjam</th>
                   <th className="px-8 py-6 text-xs font-black text-blue-900/40 uppercase tracking-widest">Tujuan</th>
                   <th className="px-8 py-6 text-xs font-black text-blue-900/40 uppercase tracking-widest">Status</th>
-                  {(userRole === 'Admin' || userRole === 'Manager') && <th className="px-8 py-6 text-xs font-black text-blue-900/40 uppercase tracking-widest text-right">Aksi</th>}
+                  <th className="px-8 py-6 text-xs font-black text-blue-900/40 uppercase tracking-widest text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -154,14 +189,17 @@ function App() {
                         {item.status}
                       </span>
                     </td>
-                    {(userRole === 'Admin' || userRole === 'Manager') && (
-                      <td className="px-8 py-6 text-right">
+                    <td className="px-8 py-6 text-right">
                         <div className="flex justify-end gap-2">
-                          <button onClick={() => handleEdit(item)} className="p-2.5 bg-slate-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all">✏️</button>
-                          {userRole === 'Admin' && <button onClick={() => item.id && handleDelete(item.id)} className="p-2.5 bg-slate-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all">🗑️</button>}
+                          <button onClick={() => item.id && handleDetail(item.id)} className="p-2.5 bg-slate-50 hover:bg-green-100 text-green-600 rounded-xl transition-all">👁️</button>
+                          {(userRole === 'Admin' || userRole === 'Manager') && (
+                              <>
+                                  <button onClick={() => handleEdit(item)} className="p-2.5 bg-slate-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-all">✏️</button>
+                                  {userRole === 'Admin' && <button onClick={() => item.id && handleDelete(item.id)} className="p-2.5 bg-slate-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all">🗑️</button>}
+                              </>
+                          )}
                         </div>
-                      </td>
-                    )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -216,6 +254,53 @@ function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- DETAIL MODAL --- */}
+      {isDetailModalOpen && selectedBooking && (
+        <div className="fixed inset-0 bg-blue-900/20 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="bg-white border border-blue-50 rounded-[2.5rem] w-full max-w-lg shadow-2xl">
+            <div className="bg-blue-600 p-8 flex justify-between items-center text-white rounded-t-[2.5rem]">
+              <h2 className="text-xl font-black tracking-tight">DETAIL PEMINJAMAN</h2>
+              <button onClick={closeDetailModal} className="text-2xl opacity-50 hover:opacity-100 transition-opacity">✕</button>
+            </div>
+            <div className="p-10 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <p><strong className="font-bold text-slate-500 block">Ruangan:</strong> <span className="text-slate-800 text-base font-semibold">{selectedBooking.roomName}</span></p>
+                <p><strong className="font-bold text-slate-500 block">Peminjam:</strong> <span className="text-slate-800 text-base font-semibold">{selectedBooking.requesterName}</span></p>
+                <p><strong className="font-bold text-slate-500 block">Waktu Mulai:</strong> <span className="text-slate-800 text-base font-semibold">{new Date(selectedBooking.startTime).toLocaleString('id-ID')}</span></p>
+                <p><strong className="font-bold text-slate-500 block">Waktu Selesai:</strong> <span className="text-slate-800 text-base font-semibold">{new Date(selectedBooking.endTime).toLocaleString('id-ID')}</span></p>
+                <p className="md:col-span-2"><strong className="font-bold text-slate-500 block">Tujuan:</strong> <span className="text-slate-800 text-base font-semibold">{selectedBooking.purpose}</span></p>
+                <p><strong className="font-bold text-slate-500 block">Status:</strong> <span className="text-slate-800 text-base font-semibold">{selectedBooking.status}</span></p>
+                <p><strong className="font-bold text-slate-500 block">Dibuat pada:</strong> <span className="text-slate-800 text-base font-semibold">{new Date(selectedBooking.createdAt).toLocaleString('id-ID')}</span></p>
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={closeDetailModal} className="w-full bg-blue-600 text-white py-3.5 rounded-2xl font-black hover:bg-blue-700 transition-all shadow-xl shadow-blue-100">TUTUP</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-rose-900/20 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="bg-white border border-rose-100 rounded-[2.5rem] w-full max-w-md shadow-2xl shadow-rose-200/50">
+            <div className="p-10 text-center">
+              <span className="text-5xl block mb-4">🗑️</span>
+              <h2 className="text-2xl font-black text-rose-900 tracking-tight">Konfirmasi Hapus</h2>
+              <p className="text-slate-500 mt-2">Apakah Anda yakin ingin menghapus data peminjaman ini secara permanen?</p>
+            </div>
+            <div className="flex bg-rose-50/50 rounded-b-[2.5rem] p-5 gap-4">
+              <button onClick={cancelDelete} className="flex-1 py-3.5 font-bold text-slate-500 hover:text-slate-700 transition-colors rounded-2xl">
+                Batal
+              </button>
+              <button onClick={confirmDelete} className="flex-1 bg-rose-600 text-white py-3.5 rounded-2xl font-black hover:bg-rose-700 transition-all shadow-xl shadow-rose-200">
+                Ya, Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}
